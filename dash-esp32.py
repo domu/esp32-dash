@@ -119,4 +119,4 @@ selected_display_names = st.sidebar.multiselect(
 )
 
 # Filtraggio e ordinamento temporale dei dati in base alla selezione dell'utente
-df_filtered = df[df['display_name'].isin(selected_display_
+df_filtered = df[df['display_name'].isin(selected_display_names)].sort_values(by='timestamp')
