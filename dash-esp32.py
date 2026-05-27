@@ -10,21 +10,13 @@ FIREBASE_DB_URL = "https://esp32-dashboard-dpb-default-rtdb.europe-west1.firebas
 @st.cache_resource
 def init_firebase():
     if not _apps:
-        # Creiamo delle credenziali "vuote" (anonime) per evitare che la libreria 
-        # cerchi i servizi IAM di Google Cloud che su Streamlit non esistono
-        anon_creds = google.auth.credentials.AnonymousCredentials()
+        # Usiamo le credenziali anonime native di firebase_admin per la modalità di test
+        cred = credentials.Anonymous()
         
-        initialize_app(
-            credential=credentials.ApplicationDefault(), # Inizializzazione standard
-            options={
-                'databaseURL': FIREBASE_DB_URL,
-                'httpTimeout': 10  # Previene blocchi se la connessione è lenta
-            }
-        )
-        
-        # Sovrascriviamo il client per usare l'accesso anonimo (richiesto per le regole di test del DB)
-        # Questo risolve il RefreshError su Streamlit Cloud
-        db._client = db._Client(credentials=anon_creds, options={'databaseURL': FIREBASE_DB_URL})
+        initialize_app(cred, {
+            'databaseURL': FIREBASE_DB_URL,
+            'httpTimeout': 10
+        })
 
 try:
     init_firebase()
