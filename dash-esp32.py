@@ -120,3 +120,130 @@ selected_display_names = st.sidebar.multiselect(
 
 # Filtraggio e ordinamento temporale dei dati in base alla selezione dell'utente
 df_filtered = df[df['display_name'].isin(selected_display_names)].sort_values(by='timestamp')
+
+# --- LAYOUT PRINCIPALE: VALORI ATTUALI (CON CONTENITORI COMPATTI MIN/MAX) ---
+st.subheader("📍 Ultimi Valori Rilevati")
+
+if selected_display_names:
+    sensors_per_row = 3
+    for i in range(0, len(selected_display_names), sensors_per_row):
+        chunk = selected_display_names[i:i + sensors_per_row]
+        cols = st.columns(len(chunk))
+        
+        for j, name in enumerate(chunk):
+            sensor_df = df_filtered[df_filtered['display_name'] == name]
+            if not sensor_df.empty:
+                last_read = sensor_df.iloc[-1]
+                
+                with cols[j]:
+                    # Contenitore con bordo per delimitare l'area del singolo modulo ESP32
+                    with st.container(border=True):
+                        st.markdown(f"### 🎯 **{name}**")
+                        st.caption(f"⏱️ Ultimo update: {last_read['timestamp'].strftime('%H:%M:%S')}")
+                        st.markdown("---")
+                        
+                        # Mostra dinamicamente tutte le metriche associate (Attuale, Min, Max)
+                        for metric in metrice_cols:
+                            if pd.notna(last_read.get(metric)):
+                                m_lower = metric.lower()
+                                suffix = "°C" if "temp" in m_lower else "%" if "umid" in m_lower or "hum" in m_lower else " lux" if "lux" in m_lower or "lum" in m_lower else ""
+                                
+                                current_val = last_read[metric]
+                                max_val = sensor_df[metric].max()
+                                min_val = sensor_df[metric].min()
+                                
+                                st.markdown(f"**{metric.capitalize()}**")
+                                sub_col1, sub_col2, sub_col3 = st.columns(3)
+                                
+                                with sub_col1:
+                                    st.metric(label="Attuale", value=f"{current_val}{suffix}")
+                                with sub_col2:
+                                    st.metric(label="Min", value=f"{min_val}{suffix}")
+                                with sub_col3:
+                                    st.metric(label="Max", value=f"{max_val}{suffix}")
+                                
+                                st.markdown("<div style='margin-bottom: -10px;'></div>", unsafe_html=True)
+else:
+    st.info("Seleziona almeno un sensore dalla barra laterale per visualizzare i blocchi dati.")
+
+# --- GRAFICI TEMPORALI AVANZATI CON PLOTLY (MOSTRATI TUTTI E 3 CONTEMPORANEAMENTE) ---
+st.markdown("---")
+st.subheader("📈 Andamento Temporale dei Valori")
+
+if not df_filtered.empty:
+    import plotly.graph_objects as go
+    
+    # Visualizzazione su 3 colonne affiancate per mostrare contemporaneamente i 3 parametri rilevati
+    g_cols = st.columns(3)
+    
+    metrics_to_plot = {
+        "temperatura": {"color": "#FF4B4B", "suffix": "°C", "col_idx": 0},
+        "umidita": {"color": "#0068C9", "suffix": "%", "col_idx": 1},
+        "luminosita": {"color": "#FFABAB", "suffix": " lux", "col_idx": 2}
+    }
+    
+    for metric_name, cfg in metrics_to_plot.items():
+        # Cerca la corrispondenza parziale della colonna (case-insensitive)
+        actual_col = [c for c in df_filtered.columns if metric_name in c.lower()]
+        
+        if actual_col:
+            m_col = actual_col[0]
+            fig = go.Figure()
+            
+            for sensor_name in df_filtered['display_name'].unique():
+                sensor_data = df_filtered[df_filtered['display_name'] == sensor_name].sort_values('timestamp')
+                
+                # Rimuove righe senza misurazioni valide per la metrica specifica
+                sensor_data_clean = sensor_data.dropna(subset=[m_col])
+                
+                if not sensor_data_clean.empty:
+                    # Linea temporale principale
+                    fig.add_trace(go.Scatter(
+                        x=sensor_data_clean['timestamp'],
+                        y=sensor_data_clean[m_col],
+                        mode='lines',
+                        name=sensor_name,
+                        line=dict(width=2)
+                    ))
+                    
+                    # Identificazione indici di picco Massimo e Minimo storici
+                    idx_max = sensor_data_clean[m_col].idxmax()
+                    idx_min = sensor_data_clean[m_col].idxmin()
+                    
+                    # Evidenziazione Punto Massimo (Triangolo Verde rivolto verso l'alto)
+                    fig.add_trace(go.Scatter(
+                        x=[sensor_data_clean.loc[idx_max, 'timestamp']],
+                        y=[sensor_data_clean.loc[idx_max, m_col]],
+                        mode='markers',
+                        name=f"Max {sensor_name}",
+                        marker=dict(color='green', size=11, symbol='triangle-up'),
+                        hovertemplate=f"Max: %{{y}}{cfg['suffix']}<br>%{{x|%H:%M:%S}}<extra></extra>",
+                        showlegend=False
+                    ))
+                    
+                    # Evidenziazione Punto Minimo (Triangolo Rosso rivolto verso il basso)
+                    fig.add_trace(go.Scatter(
+                        x=[sensor_data_clean.loc[idx_min, 'timestamp']],
+                        y=[sensor_data_clean.loc[idx_min, m_col]],
+                        mode='markers',
+                        name=f"Min {sensor_name}",
+                        marker=dict(color='red', size=11, symbol='triangle-down'),
+                        hovertemplate=f"Min: %{{y}}{cfg['suffix']}<br>%{{x|%H:%M:%S}}<extra></extra>",
+                        showlegend=False
+                    ))
+            
+            # Configurazione estetica dei grafici Plotly interattivi
+            fig.update_layout(
+                title=f"<b>{m_col.capitalize()}</b>",
+                xaxis_title="Orario",
+                yaxis_title=cfg['suffix'],
+                margin=dict(l=20, r=20, t=40, b=20),
+                height=350,
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            
+            with g_cols[cfg['col_idx']]:
+                st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("Seleziona almeno un sensore per generare i grafici temporali.")
