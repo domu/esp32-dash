@@ -162,7 +162,7 @@ if selected_display_names:
                                 with sub_col3:
                                     st.metric(label="Max", value=f"{max_val}{suffix}")
                                 
-                                st.markdown("<div style='margin-bottom: -10px;'></div>", unsafe_html=True)
+                            # st.markdown("<div style='margin-bottom: -10px;'></div>", unsafe_html=True)
 else:
     st.info("Seleziona almeno un sensore dalla barra laterale per visualizzare i blocchi dati.")
 
