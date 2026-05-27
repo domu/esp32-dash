@@ -58,10 +58,30 @@ if logs:
     for sensor_id, readings in logs.items():
         if isinstance(readings, dict):
             for timestamp, metrics in readings.items():
+                # --- PARSING ROBUSTO DEL TIMESTAMP ---
+                parsed_time = None
+                try:
+                    # Rimuove eventuali spazi se è una stringa
+                    ts_clean = str(timestamp).strip()
+                    
+                    if ts_clean.isdigit():
+                        ts_val = int(ts_clean)
+                        # Se ha 13 o più cifre è in millisecondi (es. JavaScript/Firebase standard)
+                        if ts_val > 5000000000:
+                            parsed_time = pd.to_datetime(ts_val, unit='ms')
+                        else:
+                            parsed_time = pd.to_datetime(ts_val, unit='s')
+                    else:
+                        # Prova il parsing come stringa di data standard (es. "2026-05-27 15:00:00")
+                        parsed_time = pd.to_datetime(ts_clean)
+                except Exception:
+                    # Se fallisce tutto, usa l'orario di sistema attuale per non far crashare l'app
+                    parsed_time = pd.Timestamp.now()
+
                 row = {
                     "sensor_id": sensor_id,
                     "display_name": names_mapping.get(sensor_id, sensor_id) if isinstance(names_mapping, dict) else sensor_id,
-                    "timestamp": pd.to_datetime(timestamp, unit='s') if (isinstance(timestamp, (int, float)) or (isinstance(timestamp, str) and timestamp.isdigit())) else pd.to_datetime(timestamp)
+                    "timestamp": parsed_time
                 }
                 if isinstance(metrics, dict):
                     row.update(metrics)
