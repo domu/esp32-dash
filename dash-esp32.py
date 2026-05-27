@@ -4,7 +4,7 @@ import requests
 
 # --- CONFIGURAZIONE FIREBASE ---
 # Usa il tuo URL di Firebase. ASSICURATI che finisca con il carattere "/"
-FIREBASE_DB_URL = "https://il-tuo-progetto-default-rtdb.europe-west1.firebasedatabase.app/"
+FIREBASE_DB_URL = "https://esp32-dashboard-dpb-default-rtdb.europe-west1.firebasedatabase.app/"
 
 # --- FUNZIONI DI LETTURA E SCRITTURA VIA HTTP ---
 def get_sensor_data():
