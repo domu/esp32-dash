@@ -42,6 +42,15 @@ def update_sensor_name(sensor_id, new_name):
         st.sidebar.error(f"Errore nel salvataggio del nome: {e}")
         return False
 
+def trigger_cam_snapshot():
+    """Invia il comando di scatto forzato impostando il flag a true su Firebase"""
+    try:
+        url = f"{FIREBASE_DB_URL}comandi/forza_scatto.json"
+        response = requests.put(url, json=True, timeout=5)
+        return response.status_code == 200
+    except Exception:
+        return False
+
 # --- INTERFACCIA UTENTE STREAMLIT ---
 st.set_page_config(page_title="IoT ESP32 Dashboard", layout="wide")
 st.title("🌐 Dashboard Monitoraggio ESP32")
@@ -84,7 +93,7 @@ if logs:
 # Controllo se ci sono dati nel database
 if not rows:
     st.warning("In attesa di dati dagli ESP32... Controlla che l'hardware stia inviando dati correttamente.")
-    st.info(f"Verifica che il tuo database riceva i record all'indirizzo console o tramite i log dell'ESP32.")
+    st.info("Verifica che il tuo database riceva i record all'indirizzo console o tramite i log dell'ESP32.")
     st.stop()
 
 # 1. Creazione del DataFrame principale
@@ -161,10 +170,31 @@ if selected_display_names:
                                     st.metric(label="Min", value=f"{min_val}{suffix}")
                                 with sub_col3:
                                     st.metric(label="Max", value=f"{max_val}{suffix}")
-                                
-                            # st.markdown("<div style='margin-bottom: -10px;'></div>", unsafe_html=True)
 else:
     st.info("Seleziona almeno un sensore dalla barra laterale per visualizzare i blocchi dati.")
+
+# --- SEZIONE ESP32-CAM IN TEMPO REALE VIA TELEGRAM ---
+st.markdown("---")
+st.subheader("📷 Controllo Remoto ESP32-CAM")
+
+with st.container(border=True):
+    col_info, col_btn = st.columns([2, 1])
+    
+    with col_info:
+        st.markdown("### **Scatto Istantaneo su Canale Telegram**")
+        st.write(
+            "Premendo il pulsante a fianco, verrà inviato un segnale prioritario all'ESP32-CAM. "
+            "Il dispositivo catturerà l'immagine e la inoltrerà immediatamente sul tuo account Telegram bypassando lo storage del database."
+        )
+    
+    with col_btn:
+        st.write("<br>", unsafe_html=True) # Allineamento estetico
+        if st.button("📸 FORZA SCATTO ORA", use_container_width=True, type="primary"):
+            with st.spinner("Invio segnale di scatto all'ESP32..."):
+                if trigger_cam_snapshot():
+                    st.success("Richiesta inviata! Controlla Telegram tra pochi secondi.")
+                else:
+                    st.error("Errore nell'invio del comando. Verifica la connessione del DB.")
 
 # --- GRAFICI TEMPORALI AVANZATI CON PLOTLY (MOSTRATI TUTTI E 3 CONTEMPORANEAMENTE) ---
 st.markdown("---")
