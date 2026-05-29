@@ -188,7 +188,6 @@ with st.container(border=True):
         )
     
     with col_btn:
-        st.write("<br>", unsafe_html=True) # Allineamento estetico
         if st.button("📸 FORZA SCATTO ORA", use_container_width=True, type="primary"):
             with st.spinner("Invio segnale di scatto all'ESP32..."):
                 if trigger_cam_snapshot():
