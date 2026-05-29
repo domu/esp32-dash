@@ -39,18 +39,10 @@ def update_sensor_name(sensor_id, new_name):
         st.sidebar.error(f"Errore nel salvataggio del nome: {e}")
         return False
 
-def trigger_cam_snapshot():
-    try:
-        url = f"{FIREBASE_DB_URL}comandi/forza_scatto.json"
-        response = requests.put(url, json=True, timeout=5)
-        return response.status_code == 200
-    except Exception:
-        return False
-
 # --- INTERFACCIA UTENTE STREAMLIT ---
-st.set_page_config(page_title="IoT ESP32 Dashboard", layout="wide")
-st.title("🌐 Dashboard Monitoraggio ESP32")
-st.write("Monitoraggio in tempo reale e gestione avanzata dei sensori IoT.")
+st.set_page_config(page_title="IoT Dashboard", layout="wide")
+st.title("🌐 Dashboard Monitoraggio Ambientale IoT")
+st.write("Monitoraggio in tempo reale e gestione avanzata dei sensori ambientali.")
 
 # Caricamento iniziale dei Dati da Firebase
 logs = get_sensor_data()
@@ -60,6 +52,10 @@ names_mapping = get_sensor_names()
 rows = []
 if logs:
     for sensor_id, readings in logs.items():
+        # Escludiamo esplicitamente l'anagrafica della CAM se presente nel database storico
+        if sensor_id == "ESP32_CAM_MAIN" or "cam" in sensor_id.lower():
+            continue
+            
         if isinstance(readings, dict):
             for timestamp, metrics in readings.items():
                 parsed_time = None
@@ -86,7 +82,7 @@ if logs:
                 rows.append(row)
 
 if not rows:
-    st.warning("In attesa di dati dagli ESP32... Controlla che l'hardware stia inviando dati correttamente.")
+    st.warning("In attesa di dati dai moduli di rilevamento ambientali... Controlla l'hardware.")
     st.stop()
 
 # Creazione DataFrame principale
@@ -101,7 +97,7 @@ st.sidebar.header("⚙️ Gestione Sensori")
 unique_sensors = df['sensor_id'].unique()
 
 st.sidebar.subheader("Rinomina Dispositivi")
-selected_id = st.sidebar.selectbox("Seleziona ID ESP32 da rinominare", unique_sensors)
+selected_id = st.sidebar.selectbox("Seleziona ID ESP32", unique_sensors)
 current_name = names_mapping.get(selected_id, selected_id) if isinstance(names_mapping, dict) else selected_id
 new_name = st.sidebar.text_input(f"Nuovo nome per {selected_id}", value=current_name)
 
@@ -181,21 +177,6 @@ if selected_display_names:
 else:
     st.info("Seleziona almeno un sensore dalla barra laterale.")
 
-# --- SEZIONE ESP32-CAM IN TEMPO REALE VIA TELEGRAM ---
-st.markdown("---")
-st.subheader("📷 Controllo Remoto ESP32-CAM")
-
-with st.container(border=True):
-    col_info, col_btn = st.columns([2, 1])
-    with col_info:
-        st.markdown("### **Scatto Istantaneo su Canale Telegram**")
-        st.write("Invia un segnale di scatto prioritario all'ESP32-CAM per ricevere l'immagine direttamente sul tuo smartphone.")
-    with col_btn:
-        if st.button("📸 FORZA SCATTO ORA", use_container_width=True, type="primary"):
-            with st.spinner("Invio segnale..."):
-                if trigger_cam_snapshot(): st.success("Richiesta inviata! Controlla Telegram.")
-                else: st.error("Errore nell'invio del comando.")
-
 # --- GRAFICI TEMPORALI OTTIMIZZATI ED INTELLIGENTI ---
 st.markdown("---")
 st.subheader("📈 Andamento Temporale dei Valori (Filtro Anti-Folla Attivo)")
@@ -222,19 +203,17 @@ if not df_filtered.empty:
                 sensor_data_clean = sensor_data.dropna(subset=[m_col])
                 
                 if not sensor_data_clean.empty:
-                    # Calcolo dei picchi reali sul set di dati originale prima di sfoltire la linea grafica
                     idx_max = sensor_data_clean[m_col].idxmax()
                     idx_min = sensor_data_clean[m_col].idxmin()
                     pt_max = sensor_data_clean.loc[idx_max]
                     pt_min = sensor_data_clean.loc[idx_min]
 
-                    # DOWN-SAMPLING INTELLIGENTE: Se ci sono troppi record (es. > 150), calcola la media mobile a blocchi
+                    # DOWN-SAMPLING INTELLIGENTE: Se ci sono troppi record (> 150), calcola la media a blocchi di 15 min
                     if len(sensor_data_clean) > 150:
                         sensor_data_clean = sensor_data_clean.set_index('timestamp').resample('15Min').mean(numeric_only=True).reset_index()
-                        # Ripristina il display_name perso con il resample
                         sensor_data_clean['display_name'] = sensor_name
 
-                    # Disegna la linea dell'andamento pulita e priva di rumore visivo
+                    # Disegna la linea dell'andamento pulita
                     fig.add_trace(go.Scatter(
                         x=sensor_data_clean['timestamp'],
                         y=sensor_data_clean[m_col],
@@ -243,7 +222,7 @@ if not df_filtered.empty:
                         line=dict(width=2.5)
                     ))
                     
-                    # Posiziona i marker dei massimi e minimi reali assoluti
+                    # Indicatori dei massimi e minimi reali assoluti
                     fig.add_trace(go.Scatter(
                         x=[pt_max['timestamp']], y=[pt_max[m_col]],
                         mode='markers', name=f"Max {sensor_name}",
